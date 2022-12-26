@@ -6,12 +6,13 @@
 //
 
 import UIKit
+import FirebaseAuth
 
 class RegisterViewController: UIViewController {
 
     private let imageView: UIImageView = {
         let imageView = UIImageView()
-        imageView.image = UIImage(systemName: "person")
+        imageView.image = UIImage(systemName: "person.circle")
         imageView.tintColor = .gray
         imageView.contentMode = .scaleAspectFit
         imageView.layer.masksToBounds = true
@@ -158,6 +159,8 @@ class RegisterViewController: UIViewController {
         
         emailField.resignFirstResponder()
         passwordField.resignFirstResponder()
+        firstNameField.resignFirstResponder()
+        lastNameField.resignFirstResponder()
         
         guard let email = emailField.text,
               let password = passwordField.text,
@@ -169,13 +172,34 @@ class RegisterViewController: UIViewController {
               !password.isEmpty,
               password.count > 6 else { alertUserLoginError(); return }
         
-        // Firebase Register
-        
+        Task {
+            let isUserExist = await DatabaseManager.shared.validateNewUser(with: email)
+            
+            if !isUserExist {
+                // Firebase Register
+                FirebaseAuth.Auth.auth().createUser(withEmail: email, password: password) { [weak self] result, error in
+                    guard let self = self else {
+                        return
+                    }
+                    guard let result = result, error == nil else { print("error creating user"); return }
+                    
+                    DatabaseManager.shared.insertUser(with: ChatAppUser(firstName: firstName, lastName: lastName, emailAddress: email))
+                    
+                    DispatchQueue.main.async {
+                        let user = result.user
+                        print("created User: \(user)")
+                        self.navigationController?.dismiss(animated: true)
+                    }
+                }
+            } else {
+                alertUserLoginError(message: "Looks like a user account for that email already exists.")
+            }
+        }
     }
     
-    func alertUserLoginError() {
+    func alertUserLoginError(message: String = "Please enter all infomation to create a new account.") {
         let alert = UIAlertController(title: "Woops",
-                                      message: "Please enter all infomation to create a new account.",
+                                      message: message,
                                       preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "Dismiss", style: .cancel))
         present(alert, animated: true)
